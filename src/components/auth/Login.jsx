@@ -20,6 +20,9 @@ import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation, Link } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import { FaLock, FaEnvelope, FaExclamationCircle, FaSpinner } from "react-icons/fa";
+import { baseApi, ApiUnavailableError } from '../../utils/baseApi';
+import { ToastContainer, toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 const Login = () => {
   // State management with proper initialization
@@ -69,58 +72,77 @@ const Login = () => {
     setLoading(true);
     
     try {
-      // Simulate network latency for realistic UX
+      // Try backend API first
+      try {
+        const data = await baseApi('/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password, role}),
+        });
+        // Save token/user info as needed
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('userRole', data.role);
+        localStorage.setItem('userId', data.userId);
+        localStorage.setItem('email', data.email);
+        // Log entry for admin tracking
+        const logData = {
+          userId: data.userId,
+          username: data.email,
+          role: data.role,
+          action: 'login',
+          loginTime: new Date().toISOString(),
+          ipAddress: data.ipAddress || '127.0.0.1',
+          tokenName: data.token ? data.token.substring(0, 10) + '...' : ''
+        };
+        const existingLogs = JSON.parse(localStorage.getItem('userLogs') || '[]');
+        existingLogs.push(logData);
+        localStorage.setItem('userLogs', JSON.stringify(existingLogs));
+        login(data.email);
+        navigate(from !== "/" ? from : (data.role === "admin" ? "/admin/dashboard" : "/user/dashboard"));
+        return;
+      } catch (apiErr) {
+        if (!(apiErr instanceof ApiUnavailableError)) throw apiErr;
+        // Fallback to localStorage logic below
+      }
+      // Fallback: localStorage login
       await new Promise(resolve => setTimeout(resolve, 800));
-      
-      // Get stored users from localStorage or initialize with default users
       const storedUsers = JSON.parse(localStorage.getItem('users') || JSON.stringify([
         { email: 'admin@example.com', password: 'password123', role: 'admin', userId: 'admin-123' },
         { email: 'user@example.com', password: 'password123', role: 'user', userId: 'user-456' }
       ]));
-      
-      // Find matching user
       const user = storedUsers.find(u => u.email === email && u.password === password);
-      
       if (user) {
-        // User found, proceed with login
         const mockToken = `mock-token-${Date.now()}`;
-        
-        // Store authentication data in localStorage for persistence
         localStorage.setItem("token", mockToken);
         localStorage.setItem("userRole", user.role);
         localStorage.setItem("userId", user.userId);
         localStorage.setItem("email", email);
-        
-        // Create log entry for admin tracking
         const logData = {
           userId: user.userId,
           username: email,
           role: user.role,
           action: "login",
           loginTime: new Date().toISOString(),
-          ipAddress: "127.0.0.1", // In production, this would be captured from the request
-          tokenName: mockToken.substring(0, 10) + "..." // Truncated for security
+          ipAddress: "127.0.0.1",
+          tokenName: mockToken.substring(0, 10) + "..."
         };
-        
-        // Store login logs in localStorage for admin view
         const existingLogs = JSON.parse(localStorage.getItem('userLogs') || '[]');
         existingLogs.push(logData);
         localStorage.setItem('userLogs', JSON.stringify(existingLogs));
-        
-        console.log("User login:", logData);
-        
-        // Update authentication context
         login(email);
-        
-        // Navigate to appropriate dashboard or requested page
         navigate(from !== "/" ? from : (user.role === "admin" ? "/admin/dashboard" : "/user/dashboard"));
       } else {
-        // Invalid credentials
         setError("Invalid email or password");
       }
     } catch (err) {
       console.error("Login error:", err);
-      setError("An unexpected error occurred. Please try again.");
+      if (err.message) {
+        setError(err.message);
+        toast.error(err.message);
+      } else {
+        setError("An unexpected error occurred. Please try again.");
+        toast.error("An unexpected error occurred. Please try again.");
+      }
     } finally {
       setLoading(false);
     }
@@ -128,6 +150,7 @@ const Login = () => {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-500 to-purple-600 p-6">
+      <ToastContainer position="top-center" autoClose={3000} />
       <div className="bg-white shadow-lg rounded-xl p-8 w-full max-w-md transform transition duration-300 hover:scale-105">
         {/* Header */}
         <h2 className="text-3xl font-bold text-center text-gray-800 mb-6">

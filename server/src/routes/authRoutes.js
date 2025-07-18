@@ -91,7 +91,7 @@ router.post("/login", async (req, res) => {
        // console.log("Login attempt:", { email, password,role });
         // Find user
         const user = await User.findOne({ email });
-        if (!user) return res.status(400).json({ message: "Invalid email or password" });
+        if (!user) return res.status(400).json({ message: "Invalid Email. Try Register" });
 
         // Check password using bcrypt
         const isMatch = await bcrypt.compare(password, user.password);

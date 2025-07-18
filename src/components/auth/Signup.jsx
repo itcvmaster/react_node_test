@@ -20,6 +20,9 @@ import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation, Link } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import { FaUser, FaEnvelope, FaLock, FaExclamationCircle, FaSpinner } from "react-icons/fa";
+import { baseApi, ApiUnavailableError } from '../../utils/baseApi';
+import { ToastContainer, toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 const Signup = () => {
   // Form state with proper initialization
@@ -161,23 +164,51 @@ const Signup = () => {
     setLoading(true);
     
     try {
-      // Simulate network latency for realistic UX
+      // Try backend API first
+      try {
+        const response = await baseApi('/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: formData.email,
+            password: formData.password,
+            role,
+            fullName: formData.fullName
+          }),
+        });
+        // If we get here, the request was successful (status 2xx)
+        if (response && response.message) {
+          toast.success(response.message);
+          navigate('/login', { state: { role } });
+        } else {
+          setError('Unexpected server response.');
+          toast.error('Unexpected server response.');
+        }
+        setLoading(false);
+        return;
+      } catch (apiErr) {
+        // This block is entered for 400/500 errors
+        if (apiErr.message) {
+          setError(apiErr.message);
+          toast.error(apiErr.message);
+        } else {
+          setError('An unexpected error occurred.');
+          toast.error('An unexpected error occurred.');
+        }
+        setLoading(false);
+        return;
+      }
+      // Fallback: localStorage signup
       await new Promise(resolve => setTimeout(resolve, 800));
-      
-      // Get existing users from localStorage or initialize with default users
       const storedUsers = JSON.parse(localStorage.getItem('users') || JSON.stringify([
         { email: 'admin@example.com', password: 'password123', role: 'admin', userId: 'admin-123' },
         { email: 'user@example.com', password: 'password123', role: 'user', userId: 'user-456' }
       ]));
-      
-      // Check if email already exists
       if (storedUsers.some(user => user.email === formData.email)) {
         setError("Email already in use");
         setLoading(false);
         return;
       }
-      
-      // Create new user object
       const newUser = {
         email: formData.email,
         password: formData.password,
@@ -186,47 +217,17 @@ const Signup = () => {
         fullName: formData.fullName,
         createdAt: new Date().toISOString()
       };
-      
-      // Add to stored users
       storedUsers.push(newUser);
       localStorage.setItem('users', JSON.stringify(storedUsers));
-      
-      // Generate authentication token
       const mockToken = `mock-token-${Date.now()}`;
-      
-      // Store authentication data for automatic login
       localStorage.setItem("token", mockToken);
       localStorage.setItem("userRole", newUser.role);
       localStorage.setItem("userId", newUser.userId);
       localStorage.setItem("email", newUser.email);
-      
-      // Create log entry for admin tracking
-      const logData = {
-        userId: newUser.userId,
-        username: newUser.email,
-        fullName: newUser.fullName,
-        role: newUser.role,
-        action: "register",
-        loginTime: new Date().toISOString(),
-        ipAddress: "127.0.0.1", // In production, this would be captured from the request
-        tokenName: mockToken.substring(0, 10) + "..." // Truncated for security
-      };
-      
-      // Store registration log
-      const existingLogs = JSON.parse(localStorage.getItem('userLogs') || '[]');
-      existingLogs.push(logData);
-      localStorage.setItem('userLogs', JSON.stringify(existingLogs));
-      
-      console.log("User registration:", logData);
-      
-      // Call the context signup method
-      signup(formData.email, formData.password);
-      
-      // Navigate to the appropriate dashboard
+      signup(newUser.email, newUser.password);
       navigate(newUser.role === "admin" ? "/admin/dashboard" : "/user/dashboard");
     } catch (err) {
-      console.error("Registration error:", err);
-      setError("Failed to create an account. Please try again.");
+      setError("An unexpected error occurred. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -234,6 +235,7 @@ const Signup = () => {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-500 to-purple-600 p-6">
+      <ToastContainer position="top-center" autoClose={3000} />
       <div className="bg-white shadow-lg rounded-xl p-8 w-full max-w-md transform transition duration-300 hover:scale-105">
         {/* Header */}
         <h2 className="text-3xl font-bold text-center text-gray-800 mb-6">

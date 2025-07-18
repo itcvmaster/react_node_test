@@ -17,6 +17,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { FaCheck, FaEdit, FaSpinner, FaExclamationTriangle, FaCalendarAlt, FaFlag } from 'react-icons/fa';
+import { baseApi, ApiUnavailableError } from '../../utils/baseApi';
 
 const TaskList = () => {
   // State management with proper initialization
@@ -36,19 +37,26 @@ const TaskList = () => {
   useEffect(() => {
     const loadTasks = async () => {
       try {
-        // Simulate network delay for realistic UX
+        // Try backend API first
+        try {
+          const data = await baseApi('/tasks', { method: 'GET' });
+          setTasks(data);
+          setFilteredTasks(data);
+          setError(null);
+          setLoading(false);
+          return;
+        } catch (apiErr) {
+          if (!(apiErr instanceof ApiUnavailableError)) throw apiErr;
+          // Fallback to localStorage below
+        }
+        // Fallback: localStorage
         await new Promise(resolve => setTimeout(resolve, 500));
-        
-        // Check for existing tasks in localStorage
         const storedTasks = localStorage.getItem('tasks');
-        
         if (storedTasks) {
-          // Parse and use stored tasks
           const parsedTasks = JSON.parse(storedTasks);
           setTasks(parsedTasks);
           setFilteredTasks(parsedTasks);
         } else {
-          // Initialize with mock data if no stored tasks exist
           const mockTasks = [
             {
               _id: '1',
@@ -87,14 +95,10 @@ const TaskList = () => {
               createdAt: new Date(Date.now() - 259200000).toISOString()
             }
           ];
-          
-          // Store mock tasks in localStorage for persistence
           localStorage.setItem('tasks', JSON.stringify(mockTasks));
-          
           setTasks(mockTasks);
           setFilteredTasks(mockTasks);
         }
-        
         setError(null);
       } catch (err) {
         console.error('Error loading tasks:', err);
@@ -148,29 +152,42 @@ const TaskList = () => {
    * 
    * @param {string} taskId - ID of the task to update
    */
-  const handleStatusChange = (taskId) => {
-    const updatedTasks = tasks.map(task => 
-      task._id === taskId 
-        ? { 
-            ...task, 
-            status: task.status === 'complete' ? 'incomplete' : 'complete',
-            updatedAt: new Date().toISOString()
-          } 
-        : task
-    );
-    
-    // Update local state
-    setTasks(updatedTasks);
-    setFilteredTasks(updatedTasks);
-    
-    // Persist to localStorage for cross-component sharing
-    localStorage.setItem('tasks', JSON.stringify(updatedTasks));
-    
-    // Dispatch storage event for other components
-    window.dispatchEvent(new StorageEvent('storage', {
-      key: 'tasks',
-      newValue: JSON.stringify(updatedTasks)
-    }));
+  const handleStatusChange = async (taskId) => {
+    let updatedTasks;
+    try {
+      // Try backend API first
+      try {
+        const task = tasks.find(t => t._id === taskId);
+        const updatedTask = { ...task, status: task.status === 'complete' ? 'incomplete' : 'complete', updatedAt: new Date().toISOString() };
+        await baseApi(`/tasks/${taskId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updatedTask),
+        });
+        updatedTasks = tasks.map(t => t._id === taskId ? updatedTask : t);
+      } catch (apiErr) {
+        if (!(apiErr instanceof ApiUnavailableError)) throw apiErr;
+        // Fallback to localStorage below
+        updatedTasks = tasks.map(task => 
+          task._id === taskId 
+            ? { 
+                ...task, 
+                status: task.status === 'complete' ? 'incomplete' : 'complete',
+                updatedAt: new Date().toISOString()
+              } 
+            : task
+        );
+        localStorage.setItem('tasks', JSON.stringify(updatedTasks));
+        window.dispatchEvent(new StorageEvent('storage', {
+          key: 'tasks',
+          newValue: JSON.stringify(updatedTasks)
+        }));
+      }
+      setTasks(updatedTasks);
+      setFilteredTasks(updatedTasks);
+    } catch (err) {
+      setError('Failed to update task status.');
+    }
   };
 
   /**
@@ -205,38 +222,45 @@ const TaskList = () => {
    * 
    * @param {string} taskId - ID of the task being edited
    */
-  const saveTask = (taskId) => {
+  const saveTask = async (taskId) => {
     // Form validation
     if (!editForm.title.trim()) {
       alert('Task title cannot be empty');
       return;
     }
     
-    // Update task with edited values
-    const updatedTasks = tasks.map(task => 
-      task._id === taskId 
-        ? { 
-            ...task, 
-            title: editForm.title, 
-            description: editForm.description,
-            updatedAt: new Date().toISOString()
-          } 
-        : task
-    );
-    
-    // Update local state
-    setTasks(updatedTasks);
-    setFilteredTasks(updatedTasks);
-    setEditingTask(null);
-    
-    // Persist to localStorage for cross-component sharing
-    localStorage.setItem('tasks', JSON.stringify(updatedTasks));
-    
-    // Dispatch storage event for other components
-    window.dispatchEvent(new StorageEvent('storage', {
-      key: 'tasks',
-      newValue: JSON.stringify(updatedTasks)
-    }));
+    let updatedTasks;
+    try {
+      // Try backend API first
+      try {
+        const task = tasks.find(t => t._id === taskId);
+        const updatedTask = { ...task, title: editForm.title, description: editForm.description, updatedAt: new Date().toISOString() };
+        await baseApi(`/tasks/${taskId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updatedTask),
+        });
+        updatedTasks = tasks.map(t => t._id === taskId ? updatedTask : t);
+      } catch (apiErr) {
+        if (!(apiErr instanceof ApiUnavailableError)) throw apiErr;
+        // Fallback to localStorage below
+        updatedTasks = tasks.map(task => 
+          task._id === taskId 
+            ? { ...task, title: editForm.title, description: editForm.description, updatedAt: new Date().toISOString() } 
+            : task
+        );
+        localStorage.setItem('tasks', JSON.stringify(updatedTasks));
+        window.dispatchEvent(new StorageEvent('storage', {
+          key: 'tasks',
+          newValue: JSON.stringify(updatedTasks)
+        }));
+      }
+      setTasks(updatedTasks);
+      setFilteredTasks(updatedTasks);
+      setEditingTask(null);
+    } catch (err) {
+      setError('Failed to save task.');
+    }
   };
 
   /**
