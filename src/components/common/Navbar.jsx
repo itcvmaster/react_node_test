@@ -112,7 +112,7 @@ const Navbar = () => {
 
             {/* Task List Dropdown */}
             {taskListOpen && (
-              <div className="absolute right-0 mt-2 w-80 bg-white shadow-lg rounded-lg overflow-hidden z-10">
+              <div className="absolute right-0 mt-2 w-100 bg-white shadow-lg rounded-lg overflow-hidden z-10">
                 <TaskList />
               </div>
             )}

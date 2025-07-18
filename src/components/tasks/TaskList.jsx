@@ -26,6 +26,8 @@ const TaskList = () => {
   const [error, setError] = useState(null);
   const [editingTask, setEditingTask] = useState(null);
   const [editForm, setEditForm] = useState({ title: '', description: '' });
+  const [filter, setFilter] = useState('all'); // Add filter state
+  const [search, setSearch] = useState(''); // Add search state
 
   /**
    * Load tasks from localStorage or initialize with mock data
@@ -125,6 +127,20 @@ const TaskList = () => {
       window.removeEventListener('storage', handleStorageChange);
     };
   }, []);
+
+  // Update filteredTasks when filter, search, or tasks change
+  useEffect(() => {
+    let filtered = tasks;
+    if (filter === 'completed') {
+      filtered = filtered.filter(task => task.status === 'complete');
+    } else if (filter === 'incomplete') {
+      filtered = filtered.filter(task => task.status === 'incomplete');
+    }
+    if (search.trim() !== '') {
+      filtered = filtered.filter(task => task.title.toLowerCase().includes(search.trim().toLowerCase()));
+    }
+    setFilteredTasks(filtered);
+  }, [filter, search, tasks]);
 
   /**
    * Toggle task completion status
@@ -309,7 +325,28 @@ const TaskList = () => {
   return (
     <div className="bg-white p-4 rounded-lg shadow max-h-96 overflow-y-auto">
       <h3 className="text-lg font-semibold mb-4 text-gray-800 border-b pb-2">Your Tasks</h3>
-      
+      {/* Filter and Search Controls */}
+      <div className="mb-4 flex flex-col sm:flex-row justify-between items-center gap-2">
+        <div className="flex items-center">
+          <label className="mr-2 font-semibold text-gray-700">Filter:</label>
+          <select
+            value={filter}
+            onChange={e => setFilter(e.target.value)}
+            className="p-2 border rounded-md shadow-sm focus:ring-2 focus:ring-blue-400 text-black"
+          >
+            <option value="all">All</option>
+            <option value="completed">Completed</option>
+            <option value="incomplete">Incomplete</option>
+          </select>
+        </div>
+        <input
+          type="text"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Search by title..."
+          className="p-2 border rounded-md shadow-sm focus:ring-2 focus:ring-blue-400 text-black w-full sm:w-64"
+        />
+      </div>
       <ul className="space-y-3" aria-label="Task list">
         {filteredTasks.map((task) => (
           <li key={task._id} className="border-b pb-3">

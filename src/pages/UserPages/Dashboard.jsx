@@ -16,16 +16,14 @@ const UserDashboard = () => {
     "In Progress": [],
     Completed: [],
   });
+  const [filter, setFilter] = useState("all"); // Add filter state
+  const [search, setSearch] = useState(""); // Add search state
 
   const [notes, setNotes] = useState(localStorage.getItem("notes") || "");
   const audioRef = useRef(new Audio(notificationSound));
 
-  // 🔹 Ensure page starts from top when component loads
-  useEffect(() => {
-    window.scrollTo(0, 0);
-  }, []);
-
-  useEffect(() => {
+  // Helper to load and categorize tasks from localStorage
+  const loadAndCategorizeTasks = () => {
     const storedTasks = JSON.parse(localStorage.getItem("tasks")) || [];
     const categorizedTasks = {
       "To Do": storedTasks.filter((task) => task.progress <= 40),
@@ -34,6 +32,64 @@ const UserDashboard = () => {
     };
     setTasks(categorizedTasks);
     checkDeadlines(storedTasks);
+  };
+
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
+
+  useEffect(() => {
+    // On first load, if no tasks, initialize with mock data
+    if (!localStorage.getItem("tasks")) {
+      const mockTasks = [
+        {
+          id: '1',
+          title: 'Complete project documentation',
+          description: 'Write comprehensive documentation for the TaskFlow project',
+          progress: 0,
+          priority: 'High',
+          deadline: new Date().toISOString(),
+          status: 'incomplete',
+        },
+        {
+          id: '2',
+          title: 'Fix navigation bug',
+          description: 'Address the issue with sidebar navigation on mobile devices',
+          progress: 100,
+          priority: 'Medium',
+          deadline: new Date().toISOString(),
+          status: 'complete',
+        },
+        {
+          id: '3',
+          title: 'Implement user feedback',
+          description: 'Add the user feedback form to the dashboard',
+          progress: 50,
+          priority: 'Low',
+          deadline: new Date(Date.now() + 86400000).toISOString(),
+          status: 'incomplete',
+        },
+        {
+          id: '4',
+          title: 'Update dependencies',
+          description: 'Update all npm packages to their latest versions',
+          progress: 20,
+          priority: 'Medium',
+          deadline: new Date(Date.now() + 172800000).toISOString(),
+          status: 'incomplete',
+        }
+      ];
+      localStorage.setItem("tasks", JSON.stringify(mockTasks));
+    }
+    loadAndCategorizeTasks();
+    // Listen for storage changes (from other tabs/components)
+    const handleStorage = (e) => {
+      if (e.key === "tasks") {
+        loadAndCategorizeTasks();
+      }
+    };
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
   }, []);
 
   useEffect(() => {
@@ -114,19 +170,53 @@ const UserDashboard = () => {
         </h2>
         <ToastContainer position="top-right" autoClose={5000} hideProgressBar />
 
+        {/* Filter and Search Controls */}
+        <div className="mb-4 flex flex-col sm:flex-row justify-between items-center gap-2">
+          <div className="flex items-center">
+            <label className="mr-2 font-semibold text-gray-700">Filter:</label>
+            <select
+              value={filter}
+              onChange={e => setFilter(e.target.value)}
+              className="p-2 border rounded-md shadow-sm focus:ring-2 focus:ring-blue-400"
+            >
+              <option value="all">All</option>
+              <option value="completed">Completed</option>
+              <option value="incomplete">Incomplete</option>
+            </select>
+          </div>
+          <input
+            type="text"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search by title..."
+            className="p-2 border rounded-md shadow-sm focus:ring-2 focus:ring-blue-400 w-full sm:w-64"
+          />
+        </div>
+
         {/* Kanban Board */}
         <div className="glassmorphism p-4 rounded-xl shadow-lg bg-gradient-to-br from-white/30 to-white/10 backdrop-blur-lg border border-white/20">
           <DndContext collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {Object.keys(tasks).map((columnKey) => (
-                <Column key={columnKey} title={columnKey} id={columnKey} className="w-[280px]">
-                  <SortableContext items={tasks[columnKey].map((task) => task.id)} strategy={verticalListSortingStrategy}>
-                    {tasks[columnKey].map((task) => (
-                      <SortableItem key={task.id} id={task.id} task={task} />
-                    ))}
-                  </SortableContext>
-                </Column>
-              ))}
+              {Object.keys(tasks).map((columnKey) => {
+                // Filtering logic for each column
+                let showColumn = true;
+                if (filter === "completed" && columnKey !== "Completed") showColumn = false;
+                if (filter === "incomplete" && columnKey === "Completed") showColumn = false;
+                if (!showColumn) return null;
+                // Filter tasks in the column by search
+                const filteredTasks = tasks[columnKey].filter(task =>
+                  task.title.toLowerCase().includes(search.trim().toLowerCase())
+                );
+                return (
+                  <Column key={columnKey} title={columnKey} id={columnKey} className="w-[280px]">
+                    <SortableContext items={filteredTasks.map((task) => task.id)} strategy={verticalListSortingStrategy}>
+                      {filteredTasks.map((task) => (
+                        <SortableItem key={task.id} id={task.id} task={task} />
+                      ))}
+                    </SortableContext>
+                  </Column>
+                );
+              })}
             </div>
           </DndContext>
         </div>
