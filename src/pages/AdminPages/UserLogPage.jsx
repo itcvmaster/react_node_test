@@ -19,6 +19,8 @@
 import React, { useState, useEffect } from 'react';
 import { FaTrash, FaSpinner, FaExclamationTriangle, FaUserShield, FaSort, FaFilter } from 'react-icons/fa';
 import Sidebar from '../../components/admin/Sidebar';
+import { getUserLogs, deleteUserLog } from '../../api/userLog';
+import { ApiUnavailableError } from '../../api/baseApi';
 
 const UserLogPage = () => {
   // State management with proper initialization
@@ -42,12 +44,22 @@ const UserLogPage = () => {
   useEffect(() => {
     const loadLogs = async () => {
       try {
-        // Simulate network delay for realistic UX
+        // Try backend API first
+        try {
+          const token = localStorage.getItem('token');
+          const logs = await getUserLogs(token);
+          setLogs(logs);
+          setFilteredLogs(logs);
+          setError(null);
+          setLoading(false);
+          return;
+        } catch (apiErr) {
+          if (!(apiErr instanceof ApiUnavailableError)) throw apiErr;
+          // Fallback to localStorage below
+        }
+        // Fallback: localStorage
         await new Promise(resolve => setTimeout(resolve, 800));
-        
-        // Get logs from localStorage or initialize with mock data
         const storedLogs = localStorage.getItem('userLogs');
-        
         if (storedLogs) {
           const parsedLogs = JSON.parse(storedLogs);
           setLogs(parsedLogs);
@@ -217,25 +229,31 @@ const UserLogPage = () => {
    * 
    * @param {string} logId - ID of the log to delete
    */
-  const handleDelete = (logId) => {
+  const handleDelete = async (logId) => {
     // If not confirming, show confirmation first
     if (deleteConfirm !== logId) {
       setDeleteConfirm(logId);
       return;
     }
-    
-    // User confirmed deletion
-    const updatedLogs = logs.filter(log => log.id !== logId);
-    
-    // Update state
-    setLogs(updatedLogs);
-    setFilteredLogs(filteredLogs.filter(log => log.id !== logId));
-    
-    // Update localStorage
-    localStorage.setItem('userLogs', JSON.stringify(updatedLogs));
-    
-    // Reset confirmation state
-    setDeleteConfirm(null);
+    let updatedLogs;
+    try {
+      // Try backend API first
+      try {
+        const token = localStorage.getItem('token');
+        await deleteUserLog(logId, token);
+        updatedLogs = logs.filter(log => log.id !== logId && log._id !== logId);
+      } catch (apiErr) {
+        if (!(apiErr instanceof ApiUnavailableError)) throw apiErr;
+        // Fallback to localStorage
+        updatedLogs = logs.filter(log => log.id !== logId && log._id !== logId);
+        localStorage.setItem('userLogs', JSON.stringify(updatedLogs));
+      }
+      setLogs(updatedLogs);
+      setFilteredLogs(filteredLogs.filter(log => log.id !== logId && log._id !== logId));
+      setDeleteConfirm(null);
+    } catch (err) {
+      setError('Failed to delete log.');
+    }
   };
 
   /**

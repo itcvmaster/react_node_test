@@ -23,6 +23,7 @@ import { FaUser, FaEnvelope, FaLock, FaExclamationCircle, FaSpinner } from "reac
 import { baseApi, ApiUnavailableError } from '../../utils/baseApi';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import { signupUser } from '../../api/auth';
 
 const Signup = () => {
   // Form state with proper initialization
@@ -166,15 +167,11 @@ const Signup = () => {
     try {
       // Try backend API first
       try {
-        const response = await baseApi('/auth/register', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            email: formData.email,
-            password: formData.password,
-            role,
-            fullName: formData.fullName
-          }),
+        const response = await signupUser({
+          email: formData.email,
+          password: formData.password,
+          role,
+          fullName: formData.fullName
         });
         // If we get here, the request was successful (status 2xx)
         if (response && response.message) {

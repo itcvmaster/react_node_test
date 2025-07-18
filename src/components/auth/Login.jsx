@@ -23,6 +23,7 @@ import { FaLock, FaEnvelope, FaExclamationCircle, FaSpinner } from "react-icons/
 import { baseApi, ApiUnavailableError } from '../../utils/baseApi';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import { loginUser } from '../../api/auth';
 
 const Login = () => {
   // State management with proper initialization
@@ -74,11 +75,7 @@ const Login = () => {
     try {
       // Try backend API first
       try {
-        const data = await baseApi('/auth/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password, role}),
-        });
+        const data = await loginUser({ email, password, role });
         // Save token/user info as needed
         localStorage.setItem('token', data.token);
         localStorage.setItem('userRole', data.role);

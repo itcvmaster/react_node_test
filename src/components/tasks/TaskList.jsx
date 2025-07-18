@@ -18,6 +18,7 @@
 import React, { useState, useEffect } from 'react';
 import { FaCheck, FaEdit, FaSpinner, FaExclamationTriangle, FaCalendarAlt, FaFlag } from 'react-icons/fa';
 import { baseApi, ApiUnavailableError } from '../../utils/baseApi';
+import { getTasks, updateTask, createTask, deleteTask } from '../../api/task';
 
 const TaskList = () => {
   // State management with proper initialization
@@ -39,7 +40,8 @@ const TaskList = () => {
       try {
         // Try backend API first
         try {
-          const data = await baseApi('/tasks', { method: 'GET' });
+          const token = localStorage.getItem('token');
+          const data = await getTasks(token);
           setTasks(data);
           setFilteredTasks(data);
           setError(null);
@@ -157,13 +159,10 @@ const TaskList = () => {
     try {
       // Try backend API first
       try {
+        const token = localStorage.getItem('token');
         const task = tasks.find(t => t._id === taskId);
         const updatedTask = { ...task, status: task.status === 'complete' ? 'incomplete' : 'complete', updatedAt: new Date().toISOString() };
-        await baseApi(`/tasks/${taskId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(updatedTask),
-        });
+        await updateTask(taskId, updatedTask, token);
         updatedTasks = tasks.map(t => t._id === taskId ? updatedTask : t);
       } catch (apiErr) {
         if (!(apiErr instanceof ApiUnavailableError)) throw apiErr;
@@ -233,6 +232,7 @@ const TaskList = () => {
     try {
       // Try backend API first
       try {
+        const token = localStorage.getItem('token');
         const task = tasks.find(t => t._id === taskId);
         const updatedTask = { ...task, title: editForm.title, description: editForm.description, updatedAt: new Date().toISOString() };
         await baseApi(`/tasks/${taskId}`, {
@@ -268,6 +268,66 @@ const TaskList = () => {
    */
   const cancelEditing = () => {
     setEditingTask(null);
+  };
+
+  /**
+   * Add a new task
+   * 
+   * @param {Object} newTask - New task object
+   */
+  const handleCreateTask = async (newTask) => {
+    let updatedTasks;
+    try {
+      // Try backend API first
+      try {
+        const token = localStorage.getItem('token');
+        const createdTask = await createTask(newTask, token);
+        updatedTasks = [...tasks, createdTask];
+      } catch (apiErr) {
+        if (!(apiErr instanceof ApiUnavailableError)) throw apiErr;
+        // Fallback to localStorage
+        updatedTasks = [...tasks, newTask];
+        localStorage.setItem('tasks', JSON.stringify(updatedTasks));
+        window.dispatchEvent(new StorageEvent('storage', {
+          key: 'tasks',
+          newValue: JSON.stringify(updatedTasks)
+        }));
+      }
+      setTasks(updatedTasks);
+      setFilteredTasks(updatedTasks);
+    } catch (err) {
+      setError('Failed to create task.');
+    }
+  };
+
+  /**
+   * Delete a task
+   * 
+   * @param {string} taskId - ID of the task to delete
+   */
+  const handleDeleteTask = async (taskId) => {
+    let updatedTasks;
+    try {
+      // Try backend API first
+      try {
+        const token = localStorage.getItem('token');
+        await deleteTask(taskId, token);
+        updatedTasks = tasks.filter(task => task._id !== taskId);
+      } catch (apiErr) {
+        if (!(apiErr instanceof ApiUnavailableError)) throw apiErr;
+        // Fallback to localStorage
+        updatedTasks = tasks.filter(task => task._id !== taskId);
+        localStorage.setItem('tasks', JSON.stringify(updatedTasks));
+        window.dispatchEvent(new StorageEvent('storage', {
+          key: 'tasks',
+          newValue: JSON.stringify(updatedTasks)
+        }));
+      }
+      setTasks(updatedTasks);
+      setFilteredTasks(updatedTasks);
+    } catch (err) {
+      setError('Failed to delete task.');
+    }
   };
 
   /**
